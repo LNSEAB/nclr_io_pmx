@@ -219,6 +219,14 @@ def make_materials(meshes) :
 
     return materials
 
+class default_material :
+    name = "デフォルトマテリアル"
+    diffuse_color = mathutils.Vector( ( 0.8, 0.8, 0.8 ) )
+    specular_color = mathutils.Vector( ( 0.5, 0.5, 0.5 ) )
+    specular_hardness = 50
+    ambient = 0.3
+    texture_slots = None
+
 class model_data :
     def __init__(self) :
         self.vertices = None
@@ -233,6 +241,7 @@ def make_model_data(meshes, params) :
     materials = make_materials( meshes )
 
     offset = 0
+    none_material = False
 
     for obj, mesh in meshes :
         elem_vtx, elem_fc = make_vertices_and_faces( obj, mesh )
@@ -243,10 +252,14 @@ def make_model_data(meshes, params) :
             if len( mesh.materials ) != 0 :
                 tmp_faces.append( ( [j + offset for j in i[0]], materials.index( mesh.materials[i[1]] ) ) )
             else :
-                tmp_faces.append( ( [j + offset for j in i[0]], -1 ) )
+                tmp_faces.append( ( [j + offset for j in i[0]], len( materials ) ) )
+                none_material = True
         faces.extend( tmp_faces )
 
         offset += len( elem_vtx )
+
+    if none_material :
+        materials.append( default_material() )
 
     md = model_data()
     md.vertices = vertices
@@ -257,7 +270,7 @@ def make_model_data(meshes, params) :
     return md
 
 def get_packing_type(size, is_vertex_index_size = False) :
-    if is_vertex_index_size == True :
+    if is_vertex_index_size :
         if size == 1 :
             return "B"
         elif size == 2 :
@@ -350,7 +363,9 @@ def pack_materials(md, index_sizes, params) :
         data += struct.pack( "<4f", mtrl.diffuse_color[0], mtrl.diffuse_color[1], mtrl.diffuse_color[2], 1.0 )
         data += struct.pack( "<3f", mtrl.specular_color[0], mtrl.specular_color[1], mtrl.specular_color[2] )
         data += struct.pack( "<f", mtrl.specular_hardness )
-        data += struct.pack( "<3f", 0.5, 0.5, 0.5 )
+
+        ambient = mtrl.ambient
+        data += struct.pack( "<3f", ambient, ambient, ambient )
 
         data += struct.pack( "B", 0x04 | 0x08 | 0x10 )
 
