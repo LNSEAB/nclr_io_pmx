@@ -222,6 +222,7 @@ def make_materials(meshes) :
 class default_material :
     name = "デフォルトマテリアル"
     diffuse_color = mathutils.Vector( ( 0.8, 0.8, 0.8 ) )
+    alpha = 1.0
     specular_color = mathutils.Vector( ( 0.5, 0.5, 0.5 ) )
     specular_hardness = 50
     ambient = 0.3
@@ -360,7 +361,7 @@ def pack_materials(md, index_sizes, params) :
         data += pack_string( mtrl.name, code )
         data += struct.pack( "<i", 0 )
 
-        data += struct.pack( "<4f", mtrl.diffuse_color[0], mtrl.diffuse_color[1], mtrl.diffuse_color[2], 1.0 )
+        data += struct.pack( "<4f", mtrl.diffuse_color[0], mtrl.diffuse_color[1], mtrl.diffuse_color[2], mtrl.alpha )
         data += struct.pack( "<3f", mtrl.specular_color[0], mtrl.specular_color[1], mtrl.specular_color[2] )
         data += struct.pack( "<f", mtrl.specular_hardness )
 
