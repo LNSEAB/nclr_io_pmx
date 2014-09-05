@@ -28,9 +28,18 @@ def get_objects(params) :
 
     return None
 
+def triangulate(mesh) :
+    import bmesh
+    bm = bmesh.new()
+    bm.from_mesh( mesh )
+    bmesh.ops.triangulate( bm, faces = bm.faces )
+    bm.to_mesh( mesh )
+    bm.free()
+    return mesh
+
 def make_mesh(obj, params) :
     try :
-        return obj.to_mesh( bpy.context.scene, params["apply_modifiers"], "PREVIEW", calc_tessface = False )
+        return triangulate( obj.to_mesh( bpy.context.scene, params["apply_modifiers"], "PREVIEW", calc_tessface = False ) )
     except RuntimeError :
         return None
 
@@ -132,21 +141,7 @@ class vertex_t :
         self.weight = weight,
         self.edge_ratio = edge_ratio
 
-def make_loop_faces(mesh) :
-    faces = []
-
-    for ply in mesh.polygons :
-        loops = mesh.loops[ply.loop_start : ply.loop_start + ply.loop_total]
-        N = ply.loop_total - 1
-        for i in range( N // 2 ) :
-            faces.append( ( [loops[i], loops[i + 1], loops[N - i]], ply.material_index ) )
-            if i + 1 != N - i - 1 :
-                faces.append( ( [loops[N - i], loops[i + 1], loops[N - i - 1]], ply.material_index ) )
-    
-    return faces
-
 def make_vertices_and_faces(obj, mesh) :
-    loop_faces = make_loop_faces( mesh )
     uv_data = mesh.uv_layers.active
 
     def get_uv_data(i) :
@@ -180,11 +175,11 @@ def make_vertices_and_faces(obj, mesh) :
         ) )
 
     faces = []
-    for loops in loop_faces :
+    for ply in mesh.polygons :
         face = []
-        for loop in loops[0] :
-            face.append( vius.index( ( loop.vertex_index, uv_f( loop.index ) ) ) )
-        faces.append( ( face, loops[1] ) )
+        for i in range( ply.loop_start, ply.loop_start + ply.loop_total ) :
+            face.append( vius.index( ( mesh.loops[i].vertex_index, uv_f( i ) ) ) )
+        faces.append( ( face, ply.material_index ) )
 
     if inv :
         tmp = []
@@ -230,6 +225,7 @@ class model_data :
         self.faces = None
         self.materials = None
         self.textures = None
+        self.morph = None
 
 def make_model_data(meshes, params) :
     vertices = []
