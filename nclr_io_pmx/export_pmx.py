@@ -259,6 +259,8 @@ def make_model_data(meshes, params) :
 
         offset += len( elem_vtx )
 
+    faces.sort( key = lambda i : i[1] )
+
     if none_material :
         materials.append( default_material() )
 
@@ -455,7 +457,6 @@ def pack_model(md, index_sizes, params) :
     return data
 
 def save(params) :
-
     meshes = split_objects( get_objects( params ), params )
     md = make_model_data( meshes, params )
     index_sizes = index_sizes_t( md.vertices, md.materials )
