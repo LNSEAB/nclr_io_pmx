@@ -32,11 +32,11 @@ class pmx_exporter(bpy.types.Operator, bpy_extras.io_utils.ExportHelper) :
     encoding = bpy.props.EnumProperty(
         name = "Select Encoding",
         items = (
-            ( "utf-8", "UTF-8", "" ),
-            ( "utf-16", "UTF-16(LE)", "" )
+            ( "UTF-8", "UTF-8", "" ),
+            ( "UTF-16LE", "UTF-16(LE)", "" )
         ),
         description = "",
-        default = "utf-16"
+        default = "UTF-16LE"
     )
 
     write_objects_type = bpy.props.EnumProperty(

@@ -277,8 +277,6 @@ def pack_string(s, code) :
         return struct.pack( "<i", 0 )
 
     c = s.encode( code, "ignore" )
-    if code == "utf-16" :
-        c = c[2:]
     c_len = len( c )
 
     return struct.pack( "<i" + str( c_len ) + "s", c_len, c )
@@ -288,7 +286,7 @@ def pack_header(params, index_sizes) :
     data += struct.pack( "<f", 2.0 )
 
     data += struct.pack( "B", 8 )
-    data += struct.pack( "B", 0 if params["encoding"] == "utf-16" else 1 )
+    data += struct.pack( "B", 0 if params["encoding"] == "UTF-16LE" else 1 )
     data += struct.pack( "B", 0 )
     data += struct.pack( "B", index_sizes.vertex )
     data += struct.pack( "B", index_sizes.texture )
