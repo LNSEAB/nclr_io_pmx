@@ -68,13 +68,6 @@ global_matrix = mathutils.Matrix((
     [0, 0, 0, 0.2]
 ))
 
-global_matrix_normal = mathutils.Matrix((
-    [1, 0, 0, 0],
-    [0, 0, 1, 0],
-    [0, 1, 0, 0],
-    [0, 0, 0, 1]
-))
-
 def transform(m, vec) :
     v = vec.copy()
     v.resize_4d()
@@ -87,7 +80,7 @@ def transform(m, vec) :
 def transform_normal(m, vec) :
     v = vec.copy()
     v.resize_4d()
-    v = global_matrix_normal * m * v
+    v = global_matrix * m.to_3x3().to_4x4() * v
     v.resize_3d()
     v.normalize()
 
