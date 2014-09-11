@@ -8,6 +8,7 @@ import bpy_extras
 import math
 import mathutils
 import struct
+import bmesh
 
 class weight_t :
     BDEF1 = 0
@@ -29,7 +30,6 @@ def get_objects(params) :
     return None
 
 def triangulate(mesh) :
-    import bmesh
     bm = bmesh.new()
     bm.from_mesh( mesh )
     bmesh.ops.triangulate( bm, faces = bm.faces )
@@ -53,6 +53,25 @@ def split_objects(objs, params) :
                 meshes.append( ( obj, mesh ) )
 
     return meshes
+
+def apply_shape_key(obj, block, params) :
+    tmp = obj.copy()
+    tmp.data = obj.data.copy()
+
+    bm = bmesh.new()
+    bm.from_mesh( tmp.data )
+
+    for i in range( len( block.data ) ) :
+        bm.verts[i].co = block.data[i].co
+
+    bm.to_mesh( tmp.data )
+    bm.free()
+
+    mesh = tmp.to_mesh( bpy.context.scene, params["apply_modifiers"], "PREVIEW", calc_tessface = False )
+
+    bpy.data.objects.remove( tmp )
+
+    return mesh
 
 def convert_path(path, params) :
     if params["path_type"] == "rel" :
@@ -121,6 +140,7 @@ class vertex_t :
     def __init__(
         self,
         position = mathutils.Vector( ( 0, 0, 0 ) ),
+        local_pos = mathutils.Vector( ( 0, 0, 0 ) ),
         normal = mathutils.Vector( ( 0, 0, 0 ) ),
         uv = None,
         append_uv = [],
@@ -128,6 +148,7 @@ class vertex_t :
         edge_ratio = 1.0
     ) :
         self.position = position
+        self.local_pos = local_pos,
         self.normal = normal
         self.uv = uv
         self.append_uv = append_uv
@@ -163,7 +184,7 @@ def make_vertices_and_faces(obj, mesh) :
         pos = transform( world, mesh.vertices[viu[0]].co )
         normal = transform_normal( world, mesh.vertices[viu[0]].normal )
         vertices.append( vertex_t( 
-            pos, normal,
+            pos, mesh.vertices[viu[0]].co, normal,
             mathutils.Vector( ( viu[1][0], 1.0 - viu[1][1] ) )
         ) )
 
@@ -221,18 +242,63 @@ class default_material :
     ambient = 0.3
     texture_slots = None
 
+class morph_t :
+    def __init__(self) :
+        self.name = ""
+        self.name_e = "" 
+        self.panel = 4
+        self.type = 1
+        self.offsets = []
+
+def make_morphs(meshes, vertices, params) :
+    shape_keys = {}
+
+    for obj, mesh in meshes :
+        base = obj.data.shape_keys.reference_key
+
+        for block in obj.data.shape_keys.key_blocks :
+            if base.name == block.name :
+                continue
+
+            morph = None
+            if block.name in shape_keys.keys() :
+                morph = shape_keys[block.name]
+            else :
+                morph = morph_t()
+                morph.name = block.name
+                shape_keys[block.name] = morph
+
+            sk_mesh = apply_shape_key( obj, block, params )
+
+            for src_v, dst_v in zip( mesh.vertices, sk_mesh.vertices ) :
+                if src_v.co == dst_v.co :
+                    continue
+
+                index = list( map( lambda i : i[0], filter( lambda i : i[1].local_pos[0] == src_v.co, enumerate( vertices ) ) ) )
+                offset = transform( obj.matrix_world, dst_v.co - src_v.co )
+
+                print( str( index ) )
+                
+                for i in index :
+                    morph.offsets.append( ( i, offset ) )
+
+            bpy.data.meshes.remove( sk_mesh )
+
+    return shape_keys.values()
+
 class model_data :
     def __init__(self) :
         self.vertices = None
         self.faces = None
         self.materials = None
         self.textures = None
-        self.morph = None
+        self.morphs = None
 
 def make_model_data(meshes, params) :
     vertices = []
     faces = []
     materials = make_materials( meshes )
+    morphs = []
 
     offset = 0
     none_material = False
@@ -262,6 +328,7 @@ def make_model_data(meshes, params) :
     md.faces = faces
     md.materials = materials
     md.textures = make_textures( materials, params )
+    md.morphs = make_morphs( meshes, vertices, params )
 
     return md
 
@@ -400,8 +467,18 @@ def pack_bones(md, index_sizes, params) :
 
     return data
 
-def pack_morph(md, index_sizes) :
-    data = struct.pack( "<i", 0 )
+def pack_morph(md, index_sizes, params) :
+    data = struct.pack( "<i", len( md.morphs ) )
+
+    for morph in md.morphs :
+        data += pack_string( morph.name, params["encoding"] )
+        data += struct.pack( "<i", 0 )
+        data += struct.pack( "B", morph.panel )
+        data += struct.pack( "B", morph.type )
+        data += struct.pack( "<i", len( morph.offsets ) )
+        for offset in morph.offsets :
+            data += struct.pack( get_packing_type( index_sizes.vertex, True ), offset[0] )
+            data += struct.pack( "<3f", offset[1][0], offset[1][1], offset[1][2] )
 
     return data
 
@@ -442,7 +519,7 @@ def pack_model(md, index_sizes, params) :
     data += pack_textures( md, index_sizes, params )
     data += pack_materials( md, index_sizes, params )
     data += pack_bones( md, index_sizes, params )
-    data += pack_morph( md, index_sizes )
+    data += pack_morph( md, index_sizes, params )
     data += pack_display_frame( md, index_sizes, params )
     data += pack_rigid( md, index_sizes )
     data += pack_joint( md, index_sizes )
