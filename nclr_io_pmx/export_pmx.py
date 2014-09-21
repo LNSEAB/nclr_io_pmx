@@ -9,6 +9,8 @@ import math
 import mathutils
 import struct
 import bmesh
+import sys
+import io
 
 class weight_t :
     BDEF1 = 0
@@ -54,18 +56,16 @@ def split_objects(objs, params) :
 
     return meshes
 
-def apply_shape_key(obj, block, params) :
+def apply_shape_key(obj, block, params, bm) :
     tmp = obj.copy()
     tmp.data = obj.data.copy()
 
-    bm = bmesh.new()
     bm.from_mesh( tmp.data )
 
     for i in range( len( block.data ) ) :
         bm.verts[i].co = block.data[i].co
 
     bm.to_mesh( tmp.data )
-    bm.free()
 
     mesh = tmp.to_mesh( bpy.context.scene, params["apply_modifiers"], "PREVIEW", calc_tessface = False )
 
@@ -253,12 +253,21 @@ class morph_t :
 def make_morphs(meshes, vertices, params) :
     shape_keys = {}
 
+    print( "make morph" )
+
     for obj, mesh in meshes :
+        if obj.data.shape_keys == None :
+            continue
+
+        print( "object : " + obj.name )
+
         base = obj.data.shape_keys.reference_key
 
         for block in obj.data.shape_keys.key_blocks :
             if base.name == block.name :
                 continue
+
+            print( block.name )
 
             morph = None
             if block.name in shape_keys.keys() :
@@ -268,17 +277,17 @@ def make_morphs(meshes, vertices, params) :
                 morph.name = block.name
                 shape_keys[block.name] = morph
 
-            sk_mesh = apply_shape_key( obj, block, params )
+            bm = bmesh.new()
+            sk_mesh = apply_shape_key( obj, block, params, bm )
+            bm.free()
 
             for src_v, dst_v in zip( mesh.vertices, sk_mesh.vertices ) :
                 if src_v.co == dst_v.co :
                     continue
 
                 index = list( map( lambda i : i[0], filter( lambda i : i[1].local_pos[0] == src_v.co, enumerate( vertices ) ) ) )
-                offset = transform( obj.matrix_world, dst_v.co - src_v.co )
+                offset = transform( obj.matrix_world, dst_v.co ) - transform( obj.matrix_world, src_v.co )
 
-                print( str( index ) )
-                
                 for i in index :
                     morph.offsets.append( ( i, offset ) )
 
@@ -304,6 +313,8 @@ def make_model_data(meshes, params) :
     none_material = False
 
     for obj, mesh in meshes :
+        print( "make " + obj.name )
+
         elem_vtx, elem_fc = make_vertices_and_faces( obj, mesh )
         vertices.extend( elem_vtx )
 
@@ -527,6 +538,9 @@ def pack_model(md, index_sizes, params) :
     return data
 
 def save(params) :
+    old_sysout = sys.stdout
+    sys.stdout = io.TextIOWrapper( sys.stdout.buffer, encoding = "cp932" )
+
     meshes = split_objects( get_objects( params ), params )
     md = make_model_data( meshes, params )
     index_sizes = index_sizes_t( md.vertices, md.materials )
@@ -538,5 +552,7 @@ def save(params) :
 
     for obj, mesh in meshes :
         bpy.data.meshes.remove( mesh )
+
+    sys.stdout = old_sysout
 
     return { "FINISHED" }
