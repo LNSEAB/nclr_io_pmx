@@ -56,16 +56,18 @@ def split_objects(objs, params) :
 
     return meshes
 
-def apply_shape_key(obj, block, params, bm) :
+def apply_shape_key(obj, block, params) :
     tmp = obj.copy()
     tmp.data = obj.data.copy()
 
+    bm = bmesh.new()
     bm.from_mesh( tmp.data )
 
     for i in range( len( block.data ) ) :
         bm.verts[i].co = block.data[i].co
 
     bm.to_mesh( tmp.data )
+    bm.free()
 
     mesh = tmp.to_mesh( bpy.context.scene, params["apply_modifiers"], "PREVIEW", calc_tessface = False )
 
@@ -277,9 +279,7 @@ def make_morphs(meshes, vertices, params) :
                 morph.name = block.name
                 shape_keys[block.name] = morph
 
-            bm = bmesh.new()
-            sk_mesh = apply_shape_key( obj, block, params, bm )
-            bm.free()
+            sk_mesh = apply_shape_key( obj, block, params )
 
             for src_v, dst_v in zip( mesh.vertices, sk_mesh.vertices ) :
                 if src_v.co == dst_v.co :
